@@ -1,0 +1,72 @@
+-----------------------------------------------------------------------------------------------------------------------------------------------
+WEEKLY LOG: Focusing on program goals and addressing issues that arise during the development of the INTERACT project.
+            INTERACT is an OpenCV project dealing with computer vision and designing applications using hand tracking.  
+
+Author: Rex Cummings
+Log Started: June 25, 2014 
+Note: Project began May 19, 2014 and this log doesn't include entries from roughly the first month.  
+-----------------------------------------------------------------------------------------------------------------------------------------------
+PHASE 1: June 25, 2014 
+
+done    1. Convert thresh_img to uint8 since openCV functions are picky.  
+
+done    2. Test and debug ranges to isolate as much of a hand ROI as possible
+
+done    3. Create an avg depth function that takes an image of only the thresholded hand ROI. 
+           Calculate the avg depth of all pixels that consist of that Hand object.  
+
+done    4. Plot avg distance (y-axis) versus time (x-axis) to get an idea of what a clicking motion looks like.  
+-----------------------------------------------------------------------------------------------------------------------------------------------
+PHASE 2: July 2, 2014
+
+done    1. Write incoming data to a text file for graphing using R Code, because real-time plotting significantly slows the program down.
+           Problems: When writing to the text file only the most recent data string "time avg_depth" string is recorded. 
+           Ideas: Try writing data, then write a newline separately after initial data is entered.
+                  Might be possible that when the file is opened for writing mode "w" that the previously entered data is cleared out. 
+                  Only the next dataline is stored, resulting in just one data entry once the program finishes.   
+           Solution: Change open file mode to appending mode "a" to allow new data to be inserted at the end of the file without 
+                     overwriting the file containing the previous data line entry.   
+           Completed: July 5, 2014
+    
+    2. Optimize and calculate appropriate resizing measurements needed to improve hand/mouse control to magnify the impact of 
+       hand motion on the position of the mouse.
+
+    3. Define a standard click wave by using R code. Focus on how to determine what is the baseline.
+
+    4. Incorporate dynamic time warp using the defined standard click wave for mouse integration.  
+
+    5. Create function that isolates a single Hand object for a constantly changing distance according to the platforms's resolution. 
+       Hint: Use bounding box and keep in mind that the pixels which make up a hand object are sensitive at significantly different 
+       distances from the depth camera.
+
+    6. Consider benefits of creating a window for user to place their hand to initiate the tracking for the remainder of the program.
+       Pros: ...
+       Cons: ...
+-----------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
