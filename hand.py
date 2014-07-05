@@ -54,10 +54,7 @@ class Hand(object):
         mask = np.zeros(img.shape,np.uint8)
         cv2.drawContours(mask, [self.contour], 0, 1, thickness=cv2.cv.CV_FILLED)
         masked_depth = mask * img  
-
-        #May refine efficiency by 
-
-        length = np.sum(mask) #Need to check efficiency against cv2.countNonZero(mask) using timeit.Timer() via cmd line          
+        length = np.sum(mask) #Alternative can be cv2.countNonZero(mask)          
         total_depth = np.sum(masked_depth)
         avg_depth = float(total_depth/length)
         
