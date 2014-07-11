@@ -20,7 +20,7 @@ done    4. Plot avg distance (y-axis) versus time (x-axis) to get an idea of wha
 PHASE 2: July 2, 2014
 
 done    1. Write incoming data to a text file for graphing using R Code, because real-time plotting significantly slows the program down.
-           Problems: When writing to the text file only the most recent data string "time avg_depth" string is recorded. 
+           Problem: When writing to the text file only the most recent data string "time avg_depth" string is recorded. 
            Ideas: Try writing data, then write a newline separately after initial data is entered.
                   Might be possible that when the file is opened for writing mode "w" that the previously entered data is cleared out. 
                   Only the next dataline is stored, resulting in just one data entry once the program finishes.   
@@ -28,45 +28,54 @@ done    1. Write incoming data to a text file for graphing using R Code, because
                      overwriting the file containing the previous data line entry.   
            Completed: July 5, 2014
     
-    2. Optimize and calculate appropriate resizing measurements needed to improve hand/mouse control to magnify the impact of 
-       hand motion on the position of the mouse.
+done    2. Optimize and calculate appropriate resizing measurements needed to improve hand/mouse control to magnify the impact of 
+           hand motion on the position of the mouse relative to the computers resolution.
+           Completed: July 6, 2014  
 
-    3. Define a standard click wave by using R code. Focus on how to determine what is the baseline.
+done    3. Define a standard click wave by using R code. Focus on how to determine what is the baseline.
+           Completed: July 7, 2014  
 
-    4. Incorporate dynamic time warp using the defined standard click wave for mouse integration.  
+testing    4. Incorporate dynamic time warp using the defined standard click wave 
+              (derived from analysis of trials 2 and 3 in R code) for mouse integration.  
+              Problem: Needs refining. Frame rate correction cleared up several misunderstandings.                 
+           Testing: July 9, 2014
 
-    5. Create function that isolates a single Hand object for a constantly changing distance according to the platforms's resolution. 
-       Hint: Use bounding box and keep in mind that the pixels which make up a hand object are sensitive at significantly different 
-       distances from the depth camera.
+Incomplete: Moved for completion in Phase 3
+5. Create function that isolates a single Hand object for a constantly changing distance according to the platforms's resolution. 
+   Hint: Use bounding box and keep in mind that the pixels which make up a hand object are sensitive at significantly different 
+   distances from the depth camera.
 
-    6. Consider benefits of creating a window for user to place their hand to initiate the tracking for the remainder of the program.
-       Pros: ...
-       Cons: ...
+Considerations:
+
+Consider creating a window for the user to place their hand to initiate the tracking for the remainder of the program.
+May require a filter (e.g. Kalman, etc.). Using a filter might be beneficial in terms of increasing efficiency, because 
+mitigating the area around the object of interest will enable better performance and fix a major issue. 
+
+Issue: Problematic when identifying the hand object based on minimum depth value, since it can jump to another region if that ROI 
+       is closer to the depth camera. Use a filter to allow the initial object to be tracked so that any objects outside 
+       a certain distance will be ignored even if they're have a smaller minimum depth.  Should be able to update the hand object
+       still using min depth and other future techniques.    
+                     
+       
 -----------------------------------------------------------------------------------------------------------------------------------------------
+Phase 3: July 11, 2014
 
+1. Flip image so viewed motion is not backwards.
 
+2. Investigate window error that causes portions of the contour to not be registered.
+   Idea: Problem may reside in window size, because error occurs on right side and bottom which may be outside screen size.    
 
+3. Remove certain portions of code used for testing. Replace the hard coded values and make them dynamic.
 
+4. Test hand clicking more extensively and refine the restrictions. 
+   Idea: Alternative to dynamic time warp may be to sum up difference between the two sequences and taking the absolute value.
 
+5. Create function that isolates a single Hand object for a constantly changing distance according to the platforms's resolution. 
+   Hint: Use bounding box and keep in mind that the pixels which make up a hand object are sensitive at significantly different 
+   distances from the depth camera.
 
+6. Consider creating a window for the user to place their hand to initiate the tracking for the remainder of the program.
+   May require a filter (e.g. Kalman, etc.) 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+7. Consider using data to calculate surface area. Implement the water glass algorithm by minimizing number of surface area pixels to allocate 
+   to the hand object one its filled this should improve the accuraccy of the centroid.
