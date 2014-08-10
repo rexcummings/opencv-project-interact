@@ -5,7 +5,7 @@ Purpose: Module containing utilities for identifying and tracking
          a hand based on depth images using OpenCV and OpenNI.    
 
 Authors: Rex Cummings, Nathan Sprague
-Version: 1.0, July 2, 2014 
+Version: 1.6, August 10, 2014 
 
 Credit:  Architecture based pyblob.py by Nathan Sprague.  
   
@@ -56,9 +56,26 @@ class Hand(object):
         masked_depth = mask * img  
         length = np.sum(mask)          
         total_depth = np.sum(masked_depth)
-        avg_depth = float(total_depth/length)
-        
+        avg_depth = float(total_depth/length)        
         return avg_depth    
+
+    def reconstruct_img(self, img, img_data):
+        """
+        reconstruct_img -- Construct new image from thresholded img and image data.
+
+        Parameters:
+           img - thresholded image of hand object
+           img_data - new data to construct a new image
+
+        Returns:
+           A new image with shape of mask and data from img_data.  
+        """
+        mask = np.zeros(img.shape,np.uint8)
+        cv2.drawContours(mask, [self.contour], 0, 1, thickness=cv2.cv.CV_FILLED)
+        img_data[:,:,0] = mask * img_data[:,:,0] 
+        img_data[:,:,1] = mask * img_data[:,:,1] 
+        img_data[:,:,2] = mask * img_data[:,:,2] 
+        return img_data
 
     def area(self):
         """
@@ -135,7 +152,7 @@ def find_blobs(img, min_size, max_size):
 
     Parameters:
        img - Single channel image.  All non-0 pixels will be treated as 1's. 
-       min_size, max_size - Only return blobs between these two sizes. 
+       min_size, max_size - Only return blobs between min and max contour area. 
 
      Returns:
         A list of blob objects sorted from largest to smallest. 
