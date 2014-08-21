@@ -158,40 +158,19 @@ def main():
                 kf.predict()                    
                 #Corrections
                 kf.correct(z)  
-              
+                
                 coords = (int(kf.x[0]), int(kf.x[1]))
                 vel_coords = (int(kf.x[0]) + int(5*(kf.x[2])), int(kf.x[1]) + int(5*(kf.x[3])))
                 cv2.circle(small_color_img, coords, 5, orange, thickness=-1)
                 cv2.line(small_color_img, coords, vel_coords, green, thickness=2)
-                
-                print "Orange: ", kf.x[0], kf.x[1]
-                print "diff: ", (kf.x[0] - x_vertex, kf.x[1] - y_vertex)
-
-                #move_mouse(kf.x, m, small_color_img) 
-                """    
-                
-                avg_depth = int(hd.mean_depth(thresh_img))  
-                avg_distances = avg_distances[1:]
-                avg_distances = np.append(avg_distances, avg_depth)
-                if t > 2.00:
-                    min_avg = np.amin(avg_distances)
-                    check_distances = avg_distances - min_avg          
-                    #Check if distances match standard click sequence   
-                    success_click = is_mouse_click(check_distances)
-                
-                #Control mouse with hand 
-                pos = m.position()  
-                print "MOUSE POSITION: ", pos
-                              
-                #click_mouse(color_img, centroid, success_click, m)
-                """      
+                move_mouse(kf.x, m, small_color_img) 
                 initial_roi = False                                    
                 hand_detected = False
             #Display image versions
             #cv2.imshow("small_depth_img", 10 * (small_depth_img / (2**16-1)))
             cv2.imshow("small_color_img", small_color_img)
             #cv2.imshow("small_pcl_img", small_pcl_img)
-            cv2.imshow("thresh_img", thresh_img)
+            #cv2.imshow("thresh_img", thresh_img)
             #cv2.imshow("depth_roi", 10 * (depth_roi / (2**16-1)))
             #cv2.imshow("pcl_roi", pcl_roi)  
 
@@ -200,29 +179,93 @@ def main():
 
 def move_mouse(kf_x, m, img):
     """
-    move_mouse -- Moves mouse according to centroid of a Hand object 
-                  and based on resolution ratios.    
+    move_mouse -- Moves mouse according to centroid of a Hand object.    
 
     Parameters:
-       xm - x-axis position of mouse
-       ym - y-axis position of mouse 
+       kf_x - tuple containing x, y, x_vel, and y_vel
        m - pymouse object 
-       color_img - image of window to obtain dimensions from
-       depth_roi - ROI window dimensions     
-    """
-    win_bar = 25
-    mx, my = m.position()    
+       img - image of window to obtain dimensions from
+    """ 
+    exponent, thresh = 1.5, 1
+    check_x, check_y, complete = False, False, False       
+    x, y, x_vel, y_vel = (int(kf_x[0]), int(kf_x[1]), kf_x[2], kf_x[3])
+    x_vel, y_vel = ((x_vel), (y_vel))
+    print "MM x, y, xvel, yvel: ", x, y, x_vel, y_vel
+    mx, my = m.position()
+    x_scaled, y_scaled = 0,0
+    print "before mx, my: ", mx, my
+    win_bar = 25   
+    win_height, win_width, channel = img.shape
     x_screen, y_screen = m.screen_size()
-    win_height, win_width, channels = img.shape
+    x_screen, y_screen = float(x_screen), float(y_screen)
+    min_x, max_x, max_x_roi = 1, x_screen, win_width
+    min_y, max_y, max_y_roi = 1, y_screen, win_height
+    x_ratio, y_ratio = (x_screen / float(win_width), (y_screen / float(win_height)))
 
-    x_ch = kf_x[0] * (x_screen / win_width) 
-    y_ch = kf_x[1] * (y_screen / win_height + win_bar)
-    print "x_ch: ", x_ch
-    print "y_ch: ", y_ch
-    xf = x_ch + kf_x[2]
-    yf = y_ch + kf_x[3]
-    print "Mouse Pos: ", xf, yf
+       
+
+    while complete == False:     
+        if check_x == True and check_y == True:
+            complete = True 
+        elif x_vel == 0 and y_vel == 0:
+            check_x, check_y = True, True
+        elif x_vel == 0 and not check_x:
+            check_x = True
+        elif y_vel == 0 and not check_y:
+            check_y = True
+        elif x_vel > 0 and check_x == False:    
+            x_scaled = x + math.pow(x_vel, exponent)
+            check_x = True
+        elif y_vel > 0 and check_y == False:
+            y_scaled = y + math.pow(y_vel, exponent)
+            check_y = True       
+        elif x_vel < 0 and check_x == False: 
+            x_vel = abs(x_vel)
+            check_x = True
+            x_scaled = -(x + math.pow(x_vel, exponent))
+        elif y_vel < 0 and check_y == False: 
+            y_vel = abs(y_vel)
+            check_y = True
+            y_scaled = -(y + math.pow(y_vel, exponent))   
+    print "x_scaled: ", x_scaled
+    print "y_scaled: ", y_scaled
+    x_scaled, y_scaled = (abs(x_scaled), abs(y_scaled))  
+        
+        
+        
+    
+    """    
+    if x_scaled < min_x:       
+        x_scaled = min_x
+    elif x_scaled > max_x_roi: 
+        x_scaled = max_x_roi
+    elif y_scaled < min_y:     
+        y_scaled = min_y
+    elif y_scaled > max_y_roi: 
+        y_scaled = max_y_roi
+
+    print "x_scaled: ", x_scaled
+    print "y_scaled: ", y_scaled
+    """
+    
+      
+    xf = abs(int(x_scaled * x_ratio)) 
+    yf = abs(int(y_scaled * y_ratio))     
+    print "xf: ", xf
+    print "yf: ", yf  
+    """    
+    if xf < min_x:   
+        xf = min_x
+    elif xf > max_x: 
+        xf = max_x
+    elif yf < min_y: 
+        yf = min_y
+    elif yf > max_y: 
+        yf = max_y
+    """      
     m.move(xf, yf) 
+    print "Mouse Pos: ", mx, my 
+    print
 
 def movingKF():
     """ Build and return a Kalman filter object for tracking
