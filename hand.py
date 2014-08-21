@@ -5,7 +5,7 @@ Purpose: Module containing utilities for identifying and tracking
          a hand based on depth images using OpenCV and OpenNI.    
 
 Authors: Rex Cummings, Nathan Sprague
-Version: 1.6, August 10, 2014 
+Version: 1.6, August 21, 2014 
 
 Credit:  Architecture based pyblob.py by Nathan Sprague.  
   
@@ -14,6 +14,7 @@ Note:    This will only work if OpenCV has been compiled
 """
 
 import cv2
+import math
 import numpy as np 
 
 class Hand(object):
@@ -39,6 +40,73 @@ class Hand(object):
         cv2.rectangle(img, (rect[0], rect[1]), 
                      (rect[0] + rect[2], rect[1] + rect[3]),
                      (0,255,0), 2)
+        """
+        ## TEST individually accessing pixels:
+        pixels = self.pixels()
+        for i in range(pixels.shape[0]):
+            img[pixels[i,1], pixels[i,0], :] = 0
+        """    
+    def fit_ellipse(self, color_img, x_i, y_i):
+        """Finds the ellipse that best fits the pixels for this blob.  
+
+        Return value is a three entry tuple representing a rotated
+        rectangle that encloses the ellipse:
+
+         ( (x, y), (width, height), angle ) 
+
+        Where x and y are the center of the rectangle, and the angle
+        is in degrees.
+        """
+        pixels = self.pixels(color_img, x_i, y_i)
+
+        return cv2.fitEllipse(pixels) 
+
+    def draw_ellipse(self, initial_roi, roi, color_img, x_i, y_i, x_vertex, y_vertex, color=(0,255,0)):
+        purple = (153, 0, 153)        
+        box = self.fit_ellipse(color_img, x_i, y_i)
+        ( (x, y), (width, height), angle ) = box
+        h, w = (height / 2, width / 2)
+        theta = math.radians(angle)
+        
+        #Top ellipse            
+        x_ch1 = h * math.sin(theta)
+        y_ch1 = -h * math.cos(theta)
+        x1_f, y1_f = (int(x+x_ch1), int(y+y_ch1))
+        dist1 = math.sqrt((x_vertex - x1_f)**2 + (y_vertex - y1_f)**2)            
+        #Bottom ellipse            
+        x_ch2 = -x_ch1
+        y_ch2 = -y_ch1
+        x2_f, y2_f = (int(x+x_ch2), int(y+y_ch2))
+        dist2 = math.sqrt((x_vertex - x2_f)**2 + (y_vertex - y2_f)**2)   
+        if dist1 < dist2:
+            x_vertex, y_vertex = x1_f, y1_f                
+        else:
+            x_vertex, y_vertex = x2_f, y2_f   
+        cv2.circle(color_img, (x_vertex, y_vertex), 5, purple, thickness=-1)                      
+        cv2.ellipse(color_img, box, color, thickness=2)
+        return x_vertex, y_vertex
+
+    def pixels(self, color_img, x_i, y_i):
+        """ 
+        Returns an Nx2 numpy array of pixel coordinates 
+        Note that the pixel positions are returned in (x, y) 
+        order NOT (row, col) order. 
+        """
+        # Maybe not necessary, but we will minimize memory allocation
+        # by working with an image that is just the size of the bounding
+        # box of the contour...  
+        rect = cv2.boundingRect(self.contour)     
+        occupied = np.zeros((rect[3],rect[2]),dtype=np.uint8)
+        
+        # Shift the pixels in the contour so that they lie inside the
+        # newly created image. 
+        shifted_contour = self.contour - (rect[0], rect[1])
+            
+        cv2.drawContours(occupied, [shifted_contour], 0, 255,
+                         thickness=cv2.cv.CV_FILLED)
+        pixels = np.nonzero(occupied)
+        pixels = np.array(zip(pixels[1], pixels[0])) + (rect[0], rect[1]) + (x_i, y_i)
+        return pixels
 
     def contour_outline(self, img, color=(255, 0, 0)):
         """
