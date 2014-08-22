@@ -3,10 +3,12 @@
 Hand tracking using depth sensor. Demonstration of the hand module.  
 
 Author: Rex Cummings, Nathan Sprague
-Version: 1.6, August 21, 2014
-
+Version: 1.7, August 22, 2014
+ 
 Note: Mouse Integration with hand tracking achieved through
-      utilities from PyUserInput, specifically PyMouse.  
+      utilities from PyUserInput, specifically PyMouse. \
+      Also, this will only work if OpenCV has been compiled 
+      with OpenNI support. 
 """ 
 #Custom Import Statements
 import hand 
@@ -24,30 +26,27 @@ from pymouse import PyMouse
 #Global Variable Declarations
 CENTROID = None
 VERTEX = None
+TIME_ELAPSED = None  
 
 def main():
-    global CENTROID, VERTEX
+    global CENTROID, VERTEX, TIME_ELAPSED
 
     #Variable Declarations  
-    i = 0
-    baseline = 0
-    thresh = 85
+    ii, jj, baseline, coverage = 0, 5, 0, 0.075
+    zero, thresh = 0, 85            # mm
+    time_check = 1.5                # seconds
+    min_size, max_size = 550, 20000 #number of pixels
+    begin, initial_roi, hand_detected, suc_click = False, True, False, False
+    upper_right_corner = (600, 0) 
     depth_img_shape = (400, 450)
     small_img_shape = (400, 450, 3)
-    pcl_roi_shape = (220, 200, 3)
-    depth_roi_shape = (220, 200)
-    pt1 = (525, 25)
-    pt2 = (550, 50)
-    black = (0, 0, 0)
-    white = (255, 255, 255)
-    red = (0, 0, 255)    
-    blue = (255, 0,0)
-    green = (0, 255, 0)
-    orange = (0, 128, 255)    
-    begin = False
-    initial_roi = True
-    hand_detected = False
-    avg_distances = np.ones(26, dtype=np.int)    
+    pcl_roi_shape, depth_roi_shape = (220, 200, 3), (220, 200)
+    pt1, pt2 = (525, 25), (550, 50)
+    black, white = (0, 0, 0), (255, 255, 255)
+    red, green, blue = (0, 0, 255), (0, 255, 0), (255, 0,0)
+    orange, purple = (0, 128, 255), (153, 0, 153)     
+    num_of_frames = 5
+    avg_distances = np.ones(num_of_frames, dtype=np.int)    
 
     #Instantiate mouse object 
     m = PyMouse()
@@ -59,6 +58,8 @@ def main():
     capture_depth = cv2.VideoCapture(cv2.cv.CV_CAP_OPENNI)
     
     while True:
+        t = time.clock()
+        #print "Time: ", t 
         #Retrieve depth, color, and point cloud images
         capture_depth.grab()        
         success_depth, depth_img = capture_depth.retrieve(
@@ -73,7 +74,7 @@ def main():
         color_img = cv2.flip(color_img, 1)
         pcl_img = cv2.flip(pcl_img,1) 
                 
-        #Manipulate and crop images
+        #Manipulate and reshape images
         depth_img[depth_img==0] = 2**16 - 1
         converted_img = np.array(depth_img, dtype='float32')
 
@@ -85,47 +86,47 @@ def main():
         small_color_img = color_img[15:465, 40:640]
         small_pcl_img = pcl_img[15:465, 40:640]
         trigger_box = small_depth_img[25:50, 525:550]
-
-        #Trigger program
-        if begin == False: 
-            cv2.rectangle(small_color_img, pt1, pt2, orange, thickness=-1)
+  
+        """ Begin program by placing hand over orange box. """
+        if not begin: 
+            cv2.rectangle(small_color_img, pt1, pt2, orange, thickness=-1) #start box
             cv2.imshow("small_depth_img", 10 * (small_depth_img/(2**16-1)))
             cv2.imshow("small_color_img", small_color_img)            
-            if i < 10:
+            if ii < 10:
                 baseline += np.sum(trigger_box)
-                if i == 9:
+                if ii == 9:
                     avg = baseline / 10
-                    percent = avg * 0.075
+                    percent = avg * coverage
                     influence = avg + percent
-                i += 1            
+                ii += 1            
             else:
                 totalsum = np.sum(trigger_box)
                 if totalsum > influence:
+                    TIME_ELAPSED = t
                     begin = True
         else:
             """ Start Tracking """
-            t = time.clock()
-            print "Time: ", t            
-
             #Region of Interest (ROI)
             depth_roi = np.zeros(depth_roi_shape)
             pcl_roi = np.zeros(pcl_roi_shape)
-            if initial_roi == True:
-                dif_x, dif_y = 400, 0
+            if initial_roi:
+                dif_x, dif_y = depth_img_shape[0], zero
                 depth_roi = small_depth_img[0:220, 400:600]         
                 pcl_roi = small_pcl_img[0:220, 400:600]         
             else:                
-                depth_roi, pcl_roi, dif_x, dif_y = update_roi(small_depth_img, small_pcl_img, depth_roi_shape, pcl_roi_shape)
+                depth_roi, pcl_roi, dif_x, dif_y = update_roi(small_depth_img, small_pcl_img, 
+                                                              depth_roi_shape, pcl_roi_shape)
 
             #Establish thresholded image based on a max threshold of 85mm 
             min_c, max_c, min_loc_c, max_loc_c = cv2.minMaxLoc(depth_roi)
             thresh_max = min_c + thresh    
-            ret, thresh_img = cv2.threshold(depth_roi, thresh_max, thresh_max, cv2.THRESH_BINARY_INV) 
+            ret, thresh_img = cv2.threshold(depth_roi, thresh_max, thresh_max, 
+                                            cv2.THRESH_BINARY_INV) 
             thresh8 = np.array(thresh_img, dtype='uint8')
 
             #Find Hand ROI 
-            hand_list = hand.find_blobs(thresh8, 550, 20000)
-            print "Blobs: ", len(hand_list)
+            hand_list = hand.find_blobs(thresh8, min_size, max_size)
+            #print "Blobs: ", len(hand_list)
             if(len(hand_list) > 0):
                 hd = hand_list[0]
                 hand_detected = True                            
@@ -136,43 +137,64 @@ def main():
             #Extract information from detected hand object
             while hand_detected:
                 if initial_roi:
-                    x_vertex, y_vertex = 550, 100
+                    x_vertex, y_vertex = upper_right_corner
                     cx, cy = hd.centroid()
                     CENTROID = (cx + 400, cy)               
                 else:
                     cx, cy = hd.centroid()                 
                     xf, yf = (cx + dif_x, cy + dif_y)   
                     CENTROID = xf, yf               
-                x_vertex, y_vertex = hd.draw_ellipse(initial_roi, depth_roi, small_color_img, dif_x, dif_y, x_vertex, y_vertex, [0,0,0])    
+                x_vertex, y_vertex = hd.draw_ellipse(initial_roi, depth_roi, small_color_img, 
+                                                     dif_x, dif_y, x_vertex, y_vertex, black)    
 
-                #Set Kalman Filter                
-                if initial_roi == True:
-                    kf.x[0] = x_vertex
-                    kf.x[1] = y_vertex      
-                    print "Initial: ", kf.x
-                   
+                #Set initial Kalman Filter state as (x, y, x_vel, y_vel)                
+                if initial_roi:
+                    kf.x[0] = x_vertex    
+                    kf.x[1] = y_vertex
+                    kf.x[2] = 0
+                    kf.x[3] = 0                          
                 """ Dynamic Kalman Measurements """
-                z = (x_vertex, y_vertex)
-                
+                z = (x_vertex, y_vertex)                
                 #Prediction of new points using KF 
                 kf.predict()                    
                 #Corrections
                 kf.correct(z)  
-                
+                #Display vertices and velocity vector
                 coords = (int(kf.x[0]), int(kf.x[1]))
                 vel_coords = (int(kf.x[0]) + int(5*(kf.x[2])), int(kf.x[1]) + int(5*(kf.x[3])))
                 cv2.circle(small_color_img, coords, 5, orange, thickness=-1)
                 cv2.line(small_color_img, coords, vel_coords, green, thickness=2)
-                move_mouse(kf.x, m, small_color_img) 
+                 
+                """ Mouse Control """                
+                #Mouse movement via hand                 
+                vertex_speed = move_mouse(kf.x, m, small_color_img)  
+                #Clicking                                 
+                avg_depth = int(hd.mean_depth(thresh_img, x_vertex, y_vertex, zero))  
+                avg_distances = avg_distances[1:]
+                avg_distances = np.append(avg_distances, avg_depth)
+                #print "Avg_distances: ", avg_distances
+                t_gap = t - TIME_ELAPSED 
+                if t_gap > time_check: 
+                    pos_x, pos_y = m.position()  
+                    #print "MOUSE POSITION: ", pos
+                    suc_click = is_mouse_click(avg_distances, vertex_speed)              
+                    if suc_click:
+                        #m.click(pos_x, pos_y, 1)
+                        print "Click"
+                        jj = jj - 1
+                    if jj < 5:
+                        cv2.circle(small_color_img, z, 10, green, thickness=-1)
+                        jj -= 1                        
+                        if jj == 0:
+                            jj = 5                
                 initial_roi = False                                    
                 hand_detected = False
-            #Display image versions
-            #cv2.imshow("small_depth_img", 10 * (small_depth_img / (2**16-1)))
+                suc_click = False
+            #Display desired images 
             cv2.imshow("small_color_img", small_color_img)
+            #cv2.imshow("small_depth_img", 10 * (small_depth_img / (2**16-1)))
             #cv2.imshow("small_pcl_img", small_pcl_img)
             #cv2.imshow("thresh_img", thresh_img)
-            #cv2.imshow("depth_roi", 10 * (depth_roi / (2**16-1)))
-            #cv2.imshow("pcl_roi", pcl_roi)  
 
         #Wait only 1 ms before repeating loop.
         c = cv2.waitKey(1)
@@ -185,75 +207,27 @@ def move_mouse(kf_x, m, img):
        kf_x - tuple containing x, y, x_vel, and y_vel
        m - pymouse object 
        img - image of window to obtain dimensions from
+    
+    Returns:
+       Speed of the vertex
     """ 
-    exponent, thresh = 1.5, 1
-    check_x, check_y, complete = False, False, False       
+    exponent = 1.6
     x, y, x_vel, y_vel = (int(kf_x[0]), int(kf_x[1]), kf_x[2], kf_x[3])
-    x_vel, y_vel = ((x_vel), (y_vel))
-    print "MM x, y, xvel, yvel: ", x, y, x_vel, y_vel
     mx, my = m.position()
-    x_scaled, y_scaled = 0,0
-    print "before mx, my: ", mx, my
-    win_bar = 25   
     win_height, win_width, channel = img.shape
     x_screen, y_screen = m.screen_size()
-    x_screen, y_screen = float(x_screen), float(y_screen)
-    min_x, max_x, max_x_roi = 1, x_screen, win_width
-    min_y, max_y, max_y_roi = 1, y_screen, win_height
-    x_ratio, y_ratio = (x_screen / float(win_width), (y_screen / float(win_height)))
+    min_x, max_x = 0, x_screen
+    min_y, max_y = 0, y_screen   
 
-       
+    #Calculations
+    speed = np.sqrt(x_vel**2 + y_vel**2)  
+    power = math.pow(speed, exponent) 
+    ratio = speed / power
+    theta = math.atan2(y_vel, x_vel)        
+    x_comp = power * math.cos(theta)    
+    y_comp = power * math.sin(theta)        
+    xf, yf = mx + x_comp, my + y_comp
 
-    while complete == False:     
-        if check_x == True and check_y == True:
-            complete = True 
-        elif x_vel == 0 and y_vel == 0:
-            check_x, check_y = True, True
-        elif x_vel == 0 and not check_x:
-            check_x = True
-        elif y_vel == 0 and not check_y:
-            check_y = True
-        elif x_vel > 0 and check_x == False:    
-            x_scaled = x + math.pow(x_vel, exponent)
-            check_x = True
-        elif y_vel > 0 and check_y == False:
-            y_scaled = y + math.pow(y_vel, exponent)
-            check_y = True       
-        elif x_vel < 0 and check_x == False: 
-            x_vel = abs(x_vel)
-            check_x = True
-            x_scaled = -(x + math.pow(x_vel, exponent))
-        elif y_vel < 0 and check_y == False: 
-            y_vel = abs(y_vel)
-            check_y = True
-            y_scaled = -(y + math.pow(y_vel, exponent))   
-    print "x_scaled: ", x_scaled
-    print "y_scaled: ", y_scaled
-    x_scaled, y_scaled = (abs(x_scaled), abs(y_scaled))  
-        
-        
-        
-    
-    """    
-    if x_scaled < min_x:       
-        x_scaled = min_x
-    elif x_scaled > max_x_roi: 
-        x_scaled = max_x_roi
-    elif y_scaled < min_y:     
-        y_scaled = min_y
-    elif y_scaled > max_y_roi: 
-        y_scaled = max_y_roi
-
-    print "x_scaled: ", x_scaled
-    print "y_scaled: ", y_scaled
-    """
-    
-      
-    xf = abs(int(x_scaled * x_ratio)) 
-    yf = abs(int(y_scaled * y_ratio))     
-    print "xf: ", xf
-    print "yf: ", yf  
-    """    
     if xf < min_x:   
         xf = min_x
     elif xf > max_x: 
@@ -262,10 +236,8 @@ def move_mouse(kf_x, m, img):
         yf = min_y
     elif yf > max_y: 
         yf = max_y
-    """      
-    m.move(xf, yf) 
-    print "Mouse Pos: ", mx, my 
-    print
+    m.move(xf, yf)
+    return speed
 
 def movingKF():
     """ Build and return a Kalman filter object for tracking
@@ -304,6 +276,7 @@ def offset_y_dist(img, offset):
 def update_roi(small_depth_img, small_pcl_img, depth_roi_shape, pcl_roi_shape):
     global CENTROID 
     x, y = CENTROID 
+    w_min, h_min = 100, 110
     up = y
     down = 450 - y
     left = x
@@ -313,46 +286,46 @@ def update_roi(small_depth_img, small_pcl_img, depth_roi_shape, pcl_roi_shape):
     diff_up, diff_down = abs(110 - up), abs(110 - down)  
     diff_left, diff_right = abs(100 - left), abs(100 - right) 
     
-    while complete == False:
+    while not complete:
         #Check corners, then sides
-        if up <= 110 and up_flag == False:
+        if up <= 110 and not up_flag:
             p1_y = 0; p2_y = 220
             if left > 100 and right > 100:
                 p2_x = x - 100; p1_x = x + 100
                 left_flag = True; right_flag = True
             up_flag = True; down_flag = True
-        elif right <= 100 and right_flag == False:
+        elif right <= 100 and not right_flag:
             p1_x = 600; p2_x = 400        
             if up > 110 and down > 110:
                 p1_y = y - 110; p2_y = y + 110
                 up_flag = True; down_flag = True
             right_flag = True; left_flag = True         
-        elif down <= 110 and down_flag == False:
+        elif down <= 110 and not down_flag:
             p2_y = 450; p1_y = 230
             if left > 100 and right > 100:
                 p2_x = x - 100; p1_x = x + 100
                 left_flag = True; right_flag = True
             down_flag = True; up_flag = True
-        elif left <= 100 and left_flag == False:
+        elif left <= 100 and not left_flag:
             p2_x = 0; p1_x = 200
             if up > 110 and down > 110:
                 p1_y = y - 110; p2_y = y + 110
                 up_flag = True; down_flag = True
             left_flag = True; right_flag = True
         #Check center 
-        elif up > 110 and up_flag == False:
+        elif up > 110 and not up_flag:
             p1_y = diff_up
             up_flag = True              
-        elif right > 100 and right_flag == False:         
+        elif right > 100 and not right_flag:         
             p1_x = diff_left + 200
             right_flag = True       
-        elif down > 110 and down_flag == False:
+        elif down > 110 and not down_flag:
             p2_y = diff_up + 220
             down_flag = True       
-        elif left > 100 and left_flag == False:
+        elif left > 100 and not left_flag:
             p2_x = diff_left
             left_flag = True                
-        elif up_flag == True and down_flag == True and left_flag == True and right_flag == True:
+        elif up_flag and down_flag and left_flag and right_flag:
             complete = True
     #Shift ROI appropriately  
     depth_roi = np.zeros(depth_roi_shape)
@@ -361,72 +334,7 @@ def update_roi(small_depth_img, small_pcl_img, depth_roi_shape, pcl_roi_shape):
     pcl_roi = small_pcl_img[p1_y:p2_y, p2_x:p1_x]      
     return depth_roi, pcl_roi, p2_x, p1_y
 
-def update_sa_img(sur_area_img, depth_roi, thresh8):
-    over_break_pt = False
-    sa_img = np.zeros(sur_area_img.shape, dtype=sur_area_img.dtype)
-       
-    while over_break_pt == False:
-        min_d, max_d, min_loc, max_loc = cv2.minMaxLoc(depth_roi)
-        x, y = min_loc
-        loc = y, x
-        a_val = sur_area_img.item(loc)
-        d_val = depth_roi.item(loc)
-        on_hand = thresh8.item(loc)  
-        if on_hand > 0 and d_val != 0:
-            if a_val > 1.1 or a_val < 10.0:
-                sa_img.itemset(loc, a_val)
-                depth_roi.itemset(loc, 0)
-                sa_total = np.sum(sa_img)
-                if sa_total > 10000:
-                    over_break_pt = True
-        else:
-            depth_roi.itemset(loc, 0)       
-    print "finished update"
-    #return sa_img
-
-def click_mouse(color_img, centroid, success_click, m):
-    """
-    click_mouse -- Click the mouse if the registered hand motion equates 
-                   to a successful clicking gestures.  
-
-    Parameters:
-       success_click - true if gesture equals proper mouse clicking gesture, false otherwise  
-       m - pymouse object  
-    """
-    left_click = 1
-    middle_click = 2
-    right_click = 3
-    mx, my = m.position()  
-    mpos = mx, my
-    if success_click == True:
-        cv2.circle(color_img, mpos, 10, (0, 255, 0), thickness=-1) 
-        #m.click(mx, my, left_click)
-        #Display confirm green circle for .2 seconds
-        #c = cv2.waitKey(200)
-
-    else:
-        print "No mouse click registered. \n"    
-
-def mouse_glide_to(x, y):
-    """Smooth glides mouse from current position to point x,y with specific timing and speed"""
-    #x and y are determined by previous centroid position 
-    x1, y1 = m.position
-    o_x, o_y, o_z = pcl_roi[y1, x1] 
-    n_x, n_y, n_z = pcl_roi[y2, x2] 
-    velocity = abs(sqrt((n_x-o_x)**2 + (n_y-o_y)**2 + (n_z-o_z)**2))    
-    smooth_glide_mouse(x1,y1, x, y, velocity)
- 
-def smooth_glide_mouse(x1,y1,x2,y2, t, velocity):
-    """Smoothly glides mouse from x1,y1, to x2,y2 in time t using intervals amount of intervals"""
-    distance_x = x2-x1
-    distance_y = y2-y1
-    #need to debug and find proper intervals
-    #use velocity to gauge distance traveled    
-    for n in range(0, intervals+1):
-        m.move(x1 + n * (distance_x/intervals), y1 + n * (distance_y/intervals))
-        time.sleep(t*1.0/intervals)    
-
-def is_mouse_click(check_distances):
+def is_mouse_click(dist, vertex_speed):
     """
     is_mouse_click -- Check if sequence of avg distances matches standard
                       click wave sequence based on dynamic time warp.   
@@ -437,12 +345,20 @@ def is_mouse_click(check_distances):
        True if distances match standard wave sequence, false if not.     
     """
     confirm = False
-    std_sequence = [198, 198, 199, 200, 201, 202,196, 179, 109, 58, 5, 3, 0, 6, 7, 12, 21, 29, 47, 81, 97, 152, 175, 193, 195, 195]
+    v_0 = dist[0]
+    vel_diff = np.array(dist.shape, dtype=np.int) 
+    #Obtain velocity values    
+    for j in range(len(dist)):
+        vel_ch = dist[j] - v_0
+        vel_diff = np.append(vel_diff, vel_ch) 
+        #print "Vel change: ", vel_ch
 
-    wave_diff = mlpy.dtw_std(check_distances, std_sequence, dist_only=True)
-    #print "wav diff: ", wave_diff
-    if wave_diff < 1000:
-        confirm = True
+    #Check velocity values
+    for k in range (len(vel_diff)):
+        value = abs(vel_diff[k])        
+        if value > 60 and vertex_speed < 8:
+            confirm = True
+    #print "Vel_diff: ", vel_diff
     return confirm
 
 if __name__ == "__main__":
