@@ -5,9 +5,9 @@ Purpose: Module containing utilities for identifying and tracking
          a hand based on depth images using OpenCV and OpenNI.    
 
 Authors: Rex Cummings, Nathan Sprague
-Version: 1.6, August 21, 2014 
+Version: 1.7, August 22, 2014 
 
-Credit:  Architecture based pyblob.py by Nathan Sprague.  
+Credit:  Architecture based on pyblob.py by Nathan Sprague.  
   
 Note:    This will only work if OpenCV has been compiled 
          with OpenNI support.   
@@ -40,12 +40,7 @@ class Hand(object):
         cv2.rectangle(img, (rect[0], rect[1]), 
                      (rect[0] + rect[2], rect[1] + rect[3]),
                      (0,255,0), 2)
-        """
-        ## TEST individually accessing pixels:
-        pixels = self.pixels()
-        for i in range(pixels.shape[0]):
-            img[pixels[i,1], pixels[i,0], :] = 0
-        """    
+        
     def fit_ellipse(self, color_img, x_i, y_i):
         """Finds the ellipse that best fits the pixels for this blob.  
 
@@ -62,18 +57,22 @@ class Hand(object):
         return cv2.fitEllipse(pixels) 
 
     def draw_ellipse(self, initial_roi, roi, color_img, x_i, y_i, x_vertex, y_vertex, color=(0,255,0)):
+        """Draw ellipse surrounding the hand object.
+        
+        Returns the position of the vertex of the best fit ellipse.        
+        """
         purple = (153, 0, 153)        
         box = self.fit_ellipse(color_img, x_i, y_i)
         ( (x, y), (width, height), angle ) = box
         h, w = (height / 2, width / 2)
         theta = math.radians(angle)
         
-        #Top ellipse            
+        #Top-right ellipse vertex            
         x_ch1 = h * math.sin(theta)
         y_ch1 = -h * math.cos(theta)
         x1_f, y1_f = (int(x+x_ch1), int(y+y_ch1))
         dist1 = math.sqrt((x_vertex - x1_f)**2 + (y_vertex - y1_f)**2)            
-        #Bottom ellipse            
+        #Bottom-left ellipse vertex            
         x_ch2 = -x_ch1
         y_ch2 = -y_ch1
         x2_f, y2_f = (int(x+x_ch2), int(y+y_ch2))
@@ -92,9 +91,6 @@ class Hand(object):
         Note that the pixel positions are returned in (x, y) 
         order NOT (row, col) order. 
         """
-        # Maybe not necessary, but we will minimize memory allocation
-        # by working with an image that is just the size of the bounding
-        # box of the contour...  
         rect = cv2.boundingRect(self.contour)     
         occupied = np.zeros((rect[3],rect[2]),dtype=np.uint8)
         
@@ -115,17 +111,19 @@ class Hand(object):
         cv2.drawContours(img, [self.contour], 0, color,
                         thickness=cv2.cv.CV_FILLED)
 
-    def mean_depth(self, img):
+    def mean_depth(self, img, x_vertex, y_vertex, zero):
         """
-        Returns mean depth of a contour object based on a mask.  
+        Returns mean depth around vertex of a contour object's
+        best fit ellipse.  
         """
         mask = np.zeros(img.shape,np.uint8)
         cv2.drawContours(mask, [self.contour], 0, 1, thickness=cv2.cv.CV_FILLED)
         masked_depth = mask * img  
+        box_img = find_box_img(img, x_vertex, y_vertex, zero)
         length = np.sum(mask)          
         total_depth = np.sum(masked_depth)
         avg_depth = float(total_depth/length)        
-        return avg_depth    
+        return avg_depth   
 
     def reconstruct_img(self, img, img_data):
         """
@@ -190,6 +188,30 @@ class Hand(object):
             return -1
         else:
             return 1
+
+def find_box_img(img, x_vertex, y_vertex, zero):
+    """
+    Returns box image around ellipse vertex.
+    """
+    h, w = img.shape
+    box_length = w / 3
+    box_height = h / 5
+    shift_y = box_height / 2
+    shift_x = box_length / 2
+    pt1_x, pt1_y = (x_vertex - shift_x), (y_vertex - shift_y) 
+    pt2_x, pt2_y = (x_vertex + shift_x), (y_vertex + shift_y) 
+
+    #Check dimensions
+    if pt1_x < zero:
+        pt1_x = zero 
+    elif pt1_y < zero:
+        pt1_y = zero
+    elif pt2_x > w:
+        pt2_x = w
+    elif pt2_y > h:
+        pt2_y = h
+    box_img = img[pt1_y:pt2_y, pt1_x:pt2_x]    
+    return box_img
 
 def find_color_blobs(img, min_color, max_color, min_size, max_size):
     """  
